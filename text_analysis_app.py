@@ -5,6 +5,8 @@ import matplotlib.pyplot as plt
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
+from nltk import ne_chunk, pos_tag, word_tokenize 
+from nltk.tree import Tree
 
 nltk.download('stopwords')
 nltk.download('punkt')
