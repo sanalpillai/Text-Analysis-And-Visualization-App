@@ -7,6 +7,7 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 from nltk import ne_chunk, pos_tag, word_tokenize 
 from nltk.tree import Tree
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 nltk.download('stopwords')
 nltk.download('punkt')
@@ -28,6 +29,22 @@ def generate_wordcloud(text):
                 stopwords = stop_words, 
                 min_font_size = 10).generate(text)
     return wordcloud
+
+# Function to extract keywords
+def extract_keywords(text):
+    # TF-IDF Vectorization
+    tfidf_vectorizer = TfidfVectorizer(stop_words='english')
+    tfidf_matrix = tfidf_vectorizer.fit_transform([text])
+    # Get feature names (words)
+    feature_names = tfidf_vectorizer.get_feature_names_out()
+    # Convert TF-IDF matrix to array
+    tfidf_array = tfidf_matrix.toarray()
+    # Sort feature names based on TF-IDF weights
+    sorted_indices = tfidf_array.argsort()[:, ::-1].flatten()
+    # Get top 5 keywords
+    top_keywords = [feature_names[idx] for idx in sorted_indices[:5]]
+    return top_keywords
+
 
 # Main Streamlit app
 def main():
@@ -52,6 +69,11 @@ def main():
             plt.imshow(wordcloud) 
             plt.axis("off") 
             st.pyplot(plt)
+
+            # Extract keywords
+            st.subheader('Top Keywords')
+            top_keywords = extract_keywords(text)
+            st.write(top_keywords)
 
 # Run the app
 if __name__ == '__main__':
