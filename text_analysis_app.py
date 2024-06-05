@@ -20,6 +20,7 @@ def preprocess_text(text):
 
 # Function to generate word cloud
 def generate_wordcloud(text):
+    stop_words = set(stopwords.words('english'))
     wordcloud = WordCloud(width = 800, height = 800, 
                 background_color ='white', 
                 stopwords = stop_words, 
