@@ -47,7 +47,7 @@ def summarize_lsa(text, summarization_ratio=0.2):
 
 # Main Streamlit app
 def main():
-    st.title('Text Analysis, Visualization, and Study Planner')
+    st.title('Text Analysis And Visualization')
 
     # Input text area
     text = st.text_area('Enter your text here:')
