@@ -1,8 +1,9 @@
 streamlit
+yt_dlp
+openai-whisper
 nltk
+textblob
 wordcloud
 matplotlib
-scikit-learn
-textblob
-sumy
 seaborn
+sumy
