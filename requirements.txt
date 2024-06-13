@@ -1,9 +1,11 @@
 streamlit
-yt_dlp
+yt-dlp
 openai-whisper
 nltk
 textblob
+sumy
 wordcloud
 matplotlib
 seaborn
-sumy
+pandas
+ffmpeg-python
