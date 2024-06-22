@@ -1,13 +1,11 @@
+import os
 import streamlit as st
 from collections import Counter
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
-import seaborn as sns
-import pandas as pd
 import nltk
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
-from textblob import TextBlob
 from sumy.parsers.plaintext import PlaintextParser
 from sumy.nlp.tokenizers import Tokenizer
 from sumy.summarizers.lsa import LsaSummarizer
@@ -15,6 +13,7 @@ from sumy.nlp.stemmers import Stemmer
 from sumy.utils import get_stop_words
 import yt_dlp
 import whisper
+from textblob import TextBlob
 
 nltk.download('stopwords')
 nltk.download('punkt')
@@ -50,109 +49,99 @@ def summarize_lsa(text, summarization_ratio=0.2):
 # Function to transcribe YouTube video
 @st.cache_data(show_spinner=False)
 def transcribe_youtube_video(url):
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        'outtmpl': 'audio.mp3',
-        'quiet': True,
-    }
-    
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    
-    model = whisper.load_model("base")
-    result = model.transcribe("audio.mp3")
-    return result["text"]
+    try:
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'outtmpl': 'downloads/%(id)s.%(ext)s',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'wav',
+                'preferredquality': '192',
+            }],
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info_dict = ydl.extract_info(url, download=True)
+            audio_file = ydl.prepare_filename(info_dict).replace('.webm', '.wav')
 
-# Cache the result of the summarization
-@st.cache_data(show_spinner=False)
-def cached_summarization(text, summarization_ratio):
-    summary = summarize_lsa(text, summarization_ratio=summarization_ratio)
-    return summary
+        if not os.path.exists(audio_file):
+            st.error("Audio file was not created. Please check the ffmpeg installation.")
+            return None
 
-def analyze_text(text, summarization_ratio):
-    # Preprocess the text
-    tokens = preprocess_text(text)
-    # Word frequency analysis
-    word_freq = Counter(tokens)
-    st.subheader('Word Frequency Analysis')
-    st.write(word_freq)
-
-    # Word cloud
-    st.subheader('Word Cloud')
-    wordcloud = generate_wordcloud(' '.join(tokens))
-    plt.figure(figsize=(8, 8), facecolor=None)
-    plt.imshow(wordcloud)
-    plt.axis("off")
-    st.pyplot(plt)
-
-    # Sentiment analysis
-    st.subheader('Sentiment Analysis')
-    sentiment = analyze_sentiment(text)
-    sentiment_str = ""
-    if sentiment.polarity > 0:
-        sentiment_str += "Positive"
-    elif sentiment.polarity < 0:
-        sentiment_str += "Negative"
-    else:
-        sentiment_str += "Neutral"
-    st.write(f"Sentiment: {sentiment_str}")
-    st.write(f"Polarity: {sentiment.polarity:.2f} (from -1 to 1, where 1 means positive sentiment)")
-    st.write(f"Subjectivity: {sentiment.subjectivity:.2f} (from 0 to 1, where 0 means objective and 1 means subjective)")
-
-    # Summarization
-    st.subheader('Text Summarization')
-    summary = cached_summarization(text, summarization_ratio)
-    st.write(summary)
-
-    # Visualization Options
-    st.subheader('Visualization Options')
-    st.write('### Word Frequency Bar Chart')
-    word_freq_df = pd.DataFrame(word_freq.items(), columns=['Word', 'Frequency'])
-    plt.figure(figsize=(10, 6))
-    sns.barplot(x='Frequency', y='Word', data=word_freq_df.sort_values(by='Frequency', ascending=False).head(20))
-    plt.title('Top 20 Words by Frequency')
-    st.pyplot(plt)
-
-    st.write('### Word Frequency Table')
-    st.table(word_freq_df.sort_values(by='Frequency', ascending=False).head(20))
+        model = whisper.load_model("base")
+        result = model.transcribe(audio_file)
+        return result["text"]
+    except yt_dlp.utils.DownloadError as e:
+        st.error(f"Error downloading video: {e}")
+        return None
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        return None
 
 # Main Streamlit app
 def main():
-    st.title('Text Analysis And Visualization')
+    st.title('Text & Video Analysis App')
 
-    # Option to choose input method
+    # Input method selection
     input_method = st.radio('Select input method:', ('Text', 'YouTube Video'))
 
-    text = ""
-    
+    # Text input
     if input_method == 'Text':
-        # Input text area
         text = st.text_area('Enter your text here:')
-    elif input_method == 'YouTube Video':
-        # Input YouTube video URL
+    else:
         video_url = st.text_input('Enter YouTube video URL:')
         if st.button('Transcribe Video'):
-            with st.spinner('Transcribing video...'):
-                text = transcribe_youtube_video(video_url)
-                st.success('Transcription complete!')
-                st.write("### Transcribed Text")
-                st.write(text)
-                st.session_state.transcribed_text = text
+            if video_url:
+                transcribed_text = transcribe_youtube_video(video_url)
+                if transcribed_text:
+                    st.session_state.transcribed_text = transcribed_text
+                    st.write("Transcription successful! Click the 'Analyze' button to proceed.")
+            else:
+                st.error("Please enter a valid YouTube URL.")
+
+    if input_method == 'YouTube Video' and 'transcribed_text' in st.session_state:
+        text = st.session_state.transcribed_text
+
+        st.write("Transcribed Text:")
+        st.text_area("Transcription", text, key="transcription_text")
 
     # Select summarization ratio
     summarization_ratio = st.slider('Select summarization ratio', 0.1, 1.0, 0.2)
 
-    if st.button('Analyze'):
-        if input_method == 'Text' and text:
-            analyze_text(text, summarization_ratio)
-        elif input_method == 'YouTube Video' and 'transcribed_text' in st.session_state:
-            analyze_text(st.session_state.transcribed_text, summarization_ratio)
+    # Analyze text
+    def analyze_text(text, summarization_ratio):
+        if not text and 'transcribed_text' in st.session_state:
+            text = st.session_state.transcribed_text
 
-# Run the app
-if __name__ == '__main__':
-    main()
+        if text:
+            # Display the transcribed text
+            st.write("Transcribed Text:")
+            st.text_area("Transcription", text)
+
+            # Preprocess the text
+            tokens = preprocess_text(text)
+            # Word frequency analysis
+            word_freq = Counter(tokens)
+            st.subheader('Word Frequency Analysis')
+            st.write(word_freq)
+
+            # Word cloud
+            st.subheader('Word Cloud')
+            wordcloud = generate_wordcloud(' '.join(tokens))
+            plt.figure(figsize=(8, 8), facecolor=None)
+            plt.imshow(wordcloud)
+            plt.axis("off")
+            st.pyplot(plt)
+
+            # Sentiment analysis
+            st.subheader('Sentiment Analysis')
+            sentiment = analyze_sentiment(text)
+            st.write(f"Sentiment: {sentiment}")
+            
+            # Text summarization
+            summary_text = text if 'Transcription' not in text else st.session_state.transcribed_text
+            summary = summarize_lsa(summary_text, summarization_ratio)
+            st.write("Summary:")
+            st.text_area("Summary", summary)
+
+    if st.button('Analyze'):
+        analyze_text(text, summarization_ratio)
