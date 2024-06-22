@@ -1,6 +1,6 @@
 streamlit
 yt-dlp
-openai-whisper
+whisper
 nltk
 textblob
 sumy
