@@ -15,38 +15,127 @@ import yt_dlp
 import whisper
 from textblob import TextBlob
 
-nltk.download('stopwords')
-nltk.download('punkt')
+# Set page config
+st.set_page_config(page_title="Text & Video Analysis App", layout="wide", initial_sidebar_state="collapsed")
 
-# Function to preprocess text
+# Custom CSS for dark mode
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@100;300;400;700&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Roboto', sans-serif;
+        color: #e0e0e0;
+    }
+    
+    .main {
+        background-color: #1e1e1e;
+    }
+    
+    .stApp {
+        max-width: 1200px;
+        margin: 0 auto;
+    }
+    
+    h1, h2, h3 {
+        color: #bb86fc;
+    }
+    
+    h1 {
+        font-weight: 700;
+        padding-bottom: 20px;
+        border-bottom: 2px solid #bb86fc;
+        margin-bottom: 30px;
+    }
+    
+    .stButton>button {
+        color: #ffffff;
+        background-color: #bb86fc;
+        border: none;
+        border-radius: 4px;
+        padding: 10px 20px;
+        transition: all 0.3s ease;
+    }
+    
+    .stButton>button:hover {
+        background-color: #a370f7;
+    }
+    
+    .stTextInput>div>div>input, .stTextArea>div>div>textarea {
+        background-color: #2e2e2e;
+        color: #e0e0e0;
+        border: 1px solid #4e4e4e;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    
+    .css-1v0mbdj.ebxwdo61 {
+        border: none;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        border-radius: 8px;
+        padding: 20px;
+        background-color: #2e2e2e;
+    }
+    
+    .stSlider>div>div>div>div {
+        background-color: #bb86fc;
+    }
+    
+    .stProgress>div>div>div>div {
+        background-color: #bb86fc;
+    }
+    
+    .stRadio>div {
+        background-color: #2e2e2e;
+        border-radius: 4px;
+        padding: 10px;
+    }
+    
+    .st-emotion-cache-10trblm {
+        color: #e0e0e0;
+    }
+    
+    .st-emotion-cache-1gulkj5 {
+        background-color: #2e2e2e;
+    }
+    
+    .word-freq-header {
+        color: #bb86fc;
+        font-size: 1.2em;
+        font-weight: bold;
+        margin-bottom: 10px;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+@st.cache_resource
+def load_nltk_data():
+    nltk.download('stopwords', quiet=True)
+    nltk.download('punkt', quiet=True)
+
+load_nltk_data()
+
 def preprocess_text(text):
     tokens = word_tokenize(text.lower())
     stop_words = set(stopwords.words('english'))
-    filtered_tokens = [word for word in tokens if word.isalnum() and word not in stop_words]
-    return filtered_tokens
+    return [word for word in tokens if word.isalnum() and word not in stop_words]
 
-# Function to generate word cloud
 def generate_wordcloud(text):
-    stop_words = set(stopwords.words('english'))
-    wordcloud = WordCloud(width=800, height=800, background_color='white', stopwords=stop_words, min_font_size=10).generate(text)
+    wordcloud = WordCloud(width=800, height=400, background_color='#1e1e1e', 
+                          stopwords=set(stopwords.words('english')), 
+                          min_font_size=10, colormap='viridis').generate(text)
     return wordcloud
 
-# Function for sentiment analysis
 def analyze_sentiment(text):
-    blob = TextBlob(text)
-    sentiment = blob.sentiment
-    return sentiment
+    return TextBlob(text).sentiment
 
-# Function to summarize text using LSA
 def summarize_lsa(text, summarization_ratio=0.2):
     parser = PlaintextParser.from_string(text, Tokenizer("english"))
-    stemmer = Stemmer("english")
-    summarizer = LsaSummarizer(stemmer)
+    summarizer = LsaSummarizer(Stemmer("english"))
     summarizer.stop_words = get_stop_words("english")
-    summary = summarizer(parser.document, sentences_count=int(summarization_ratio * len(text.split('\n'))))
-    return " ".join([str(sentence) for sentence in summary])
+    sentence_count = max(1, int(summarization_ratio * len(parser.document.sentences)))
+    return " ".join(str(sentence) for sentence in summarizer(parser.document, sentences_count=sentence_count))
 
-# Function to transcribe YouTube video
 @st.cache_data(show_spinner=False)
 def transcribe_youtube_video(url):
     try:
@@ -68,80 +157,95 @@ def transcribe_youtube_video(url):
             return None
 
         model = whisper.load_model("base")
-        result = model.transcribe(audio_file)
-        return result["text"]
-    except yt_dlp.utils.DownloadError as e:
-        st.error(f"Error downloading video: {e}")
-        return None
+        return model.transcribe(audio_file)["text"]
     except Exception as e:
         st.error(f"An error occurred: {e}")
         return None
 
-# Main Streamlit app
+def analyze_text(text, summarization_ratio):
+    if not text:
+        st.error("Please enter text or transcribe a video before analyzing.")
+        return
+
+    st.subheader("Analysis Results")
+
+    col1, col2 = st.columns([3, 2])
+
+    with col1:
+        with st.expander("Analyzed Text", expanded=True):
+            st.text_area("", text, height=200)
+
+        tokens = preprocess_text(text)
+        word_freq = Counter(tokens).most_common(10)
+        
+        st.markdown('<p class="word-freq-header">Top 10 Word Frequencies</p>', unsafe_allow_html=True)
+        with st.expander("View Frequencies", expanded=True):
+            for word, freq in word_freq:
+                st.text(f"{word}: {freq}")
+
+    with col2:
+        st.subheader('Word Cloud')
+        wordcloud = generate_wordcloud(' '.join(tokens))
+        fig, ax = plt.subplots(figsize=(10, 5))
+        ax.imshow(wordcloud, interpolation='bilinear')
+        ax.axis('off')
+        plt.tight_layout(pad=0)
+        fig.patch.set_facecolor('#1e1e1e')
+        st.pyplot(fig)
+
+    st.subheader('Sentiment Analysis')
+    sentiment = analyze_sentiment(text)
+    col1, col2 = st.columns(2)
+    col1.metric("Polarity", f"{sentiment.polarity:.2f}")
+    col2.metric("Subjectivity", f"{sentiment.subjectivity:.2f}")
+
+    # Generate one-line summary for sentiment analysis
+    polarity = sentiment.polarity
+    subjectivity = sentiment.subjectivity
+    
+    polarity_label = "neutral"
+    if polarity > 0.1:
+        polarity_label = "positive"
+    elif polarity < -0.1:
+        polarity_label = "negative"
+    
+    subjectivity_label = "neutral"
+    if subjectivity > 0.6:
+        subjectivity_label = "highly subjective"
+    elif subjectivity < 0.4:
+        subjectivity_label = "quite objective"
+
+    sentiment_summary = f"The text is {polarity_label} in tone and {subjectivity_label} in nature."
+    st.markdown(f"**Sentiment Summary:** {sentiment_summary}")
+
+    st.subheader('Text Summary')
+    summary = summarize_lsa(text, summarization_ratio)
+    st.text_area("", summary, height=150)
+
 def main():
     st.title('Text & Video Analysis App')
 
-    # Input method selection
-    input_method = st.radio('Select input method:', ('Text', 'YouTube Video'))
+    input_method = st.radio('Select input method:', ('Text', 'YouTube Video'), horizontal=True)
 
-    # Text input
     if input_method == 'Text':
-        text = st.text_area('Enter your text here:')
+        text = st.text_area('Enter your text here:', height=200)
     else:
         video_url = st.text_input('Enter YouTube video URL:')
         if st.button('Transcribe Video'):
             if video_url:
-                transcribed_text = transcribe_youtube_video(video_url)
+                with st.spinner('Transcribing video...'):
+                    transcribed_text = transcribe_youtube_video(video_url)
                 if transcribed_text:
                     st.session_state.transcribed_text = transcribed_text
-                    st.write("Transcription successful! Click the 'Analyze' button to proceed.")
+                    st.success("Transcription successful! Click 'Analyze' to proceed.")
             else:
                 st.error("Please enter a valid YouTube URL.")
+        text = st.session_state.get('transcribed_text', '')
 
-    if input_method == 'YouTube Video' and 'transcribed_text' in st.session_state:
-        text = st.session_state.transcribed_text
-
-        st.write("Transcribed Text:")
-        st.text_area("Transcription", text, key="transcription_text")
-
-    # Select summarization ratio
-    summarization_ratio = st.slider('Select summarization ratio', 0.1, 1.0, 0.2)
-
-    # Analyze text
-    def analyze_text(text, summarization_ratio):
-        if not text and 'transcribed_text' in st.session_state:
-            text = st.session_state.transcribed_text
-
-        if text:
-            # Display the transcribed text
-            st.write("Transcribed Text:")
-            st.text_area("Transcription", text)
-
-            # Preprocess the text
-            tokens = preprocess_text(text)
-            # Word frequency analysis
-            word_freq = Counter(tokens)
-            st.subheader('Word Frequency Analysis')
-            st.write(word_freq)
-
-            # Word cloud
-            st.subheader('Word Cloud')
-            wordcloud = generate_wordcloud(' '.join(tokens))
-            plt.figure(figsize=(8, 8), facecolor=None)
-            plt.imshow(wordcloud)
-            plt.axis("off")
-            st.pyplot(plt)
-
-            # Sentiment analysis
-            st.subheader('Sentiment Analysis')
-            sentiment = analyze_sentiment(text)
-            st.write(f"Sentiment: {sentiment}")
-            
-            # Text summarization
-            summary_text = text if 'Transcription' not in text else st.session_state.transcribed_text
-            summary = summarize_lsa(summary_text, summarization_ratio)
-            st.write("Summary:")
-            st.text_area("Summary", summary)
+    summarization_ratio = st.slider('Summarization ratio', 0.1, 1.0, 0.2)
 
     if st.button('Analyze'):
         analyze_text(text, summarization_ratio)
+
+if __name__ == '__main__':
+    main()
