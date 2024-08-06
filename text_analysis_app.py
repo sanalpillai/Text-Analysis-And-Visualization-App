@@ -1,4 +1,5 @@
 import os
+import subprocess
 import streamlit as st
 from collections import Counter
 from wordcloud import WordCloud
@@ -14,6 +15,9 @@ from sumy.utils import get_stop_words
 import yt_dlp
 import whisper
 from textblob import TextBlob
+
+# Set the path to ffmpeg
+os.environ['FFMPEG_BINARY'] = '/usr/bin/ffmpeg'  # Update this path to where ffmpeg is located
 
 # Set page config
 st.set_page_config(page_title="Text & Video Analysis App", layout="wide", initial_sidebar_state="collapsed")
@@ -147,21 +151,34 @@ def transcribe_youtube_video(url):
                 'preferredcodec': 'wav',
                 'preferredquality': '192',
             }],
+            'ffmpeg_location': '/usr/bin/ffmpeg',  # Specify the ffmpeg binary path
         }
+        
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info_dict = ydl.extract_info(url, download=True)
-            audio_file = ydl.prepare_filename(info_dict).replace('.webm', '.wav')
+            video_id = info_dict.get('id', 'video')
+            audio_file = f'downloads/{video_id}.wav'
 
+        st.write(f"Attempting to access audio file: {audio_file}")
+        
         if not os.path.exists(audio_file):
-            st.error("Audio file was not created. Please check the ffmpeg installation.")
+            st.error(f"Audio file not found at {audio_file}. Checking directory contents:")
+            directory = 'downloads'
+            files = os.listdir(directory)
+            for file in files:
+                st.write(f"- {file}")
             return None
 
+        st.success(f"Audio file found: {audio_file}")
+        
         model = whisper.load_model("base")
-        return model.transcribe(audio_file)["text"]
+        result = model.transcribe(audio_file)
+        return result["text"]
+    
     except Exception as e:
-        st.error(f"An error occurred: {e}")
+        st.error(f"An error occurred: {str(e)}")
         return None
-
+    
 def analyze_text(text, summarization_ratio):
     if not text:
         st.error("Please enter text or transcribe a video before analyzing.")
@@ -222,6 +239,18 @@ def analyze_text(text, summarization_ratio):
     summary = summarize_lsa(text, summarization_ratio)
     st.text_area("", summary, height=150)
 
+def check_ffmpeg():
+    try:
+        result = subprocess.run(['ffmpeg', '-version'], check=True, capture_output=True, text=True)
+        st.write("FFmpeg version: " + result.stdout.split('\n')[0])
+        return True
+    except subprocess.CalledProcessError as e:
+        st.error(f"FFmpeg check failed: {str(e)}")
+        return False
+    except FileNotFoundError:
+        st.error("FFmpeg not found in system path")
+        return False
+    
 def main():
     st.title('Text & Video Analysis App')
 
@@ -231,16 +260,22 @@ def main():
         text = st.text_area('Enter your text here:', height=200)
     else:
         video_url = st.text_input('Enter YouTube video URL:')
+        if 'transcribed_text' in st.session_state:
+            text = st.text_area('Transcribed text:', st.session_state.transcribed_text, height=200)
+        else:
+            text = ""
+        
         if st.button('Transcribe Video'):
             if video_url:
                 with st.spinner('Transcribing video...'):
                     transcribed_text = transcribe_youtube_video(video_url)
                 if transcribed_text:
                     st.session_state.transcribed_text = transcribed_text
-                    st.success("Transcription successful! Click 'Analyze' to proceed.")
+                    st.success("Transcription successful! The transcribed text is displayed below. Click 'Analyze' to proceed.")
+                    st.text_area('Transcribed text:', transcribed_text, height=200)
+                    text = transcribed_text
             else:
                 st.error("Please enter a valid YouTube URL.")
-        text = st.session_state.get('transcribed_text', '')
 
     summarization_ratio = st.slider('Summarization ratio', 0.1, 1.0, 0.2)
 
