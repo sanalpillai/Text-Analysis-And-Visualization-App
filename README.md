@@ -81,10 +81,10 @@ This is a Streamlit app that allows you to analyze text and YouTube video transc
 ![Analysis And Word Count](Screenshots/Analysis%20And%20Word%20Count.png)
 
 ### Text Summary
-![Text Summary](Screenshots/Text%20Summary.png)
+![Text Summary](Screenshots/text%20summary.png)
 
 ### Word Frequency and Sentiment Analysis
-![Word Frequency And Sentiment Analysis](Screenshots/Word%20Frequency%20And%20Sentiment%20Analysis.png)
+![Word Frequency And Sentiment Analysis](Screenshots/word%20frequency%20and%20sentiment%20analysis.png)
 
 ## Contributing
 
